@@ -1,51 +1,93 @@
-import axios from "axios";
+import SlimSelect from 'slim-select';
+import Notiflix from 'notiflix';
+import { fetchBreeds, fetchCatByBreed } from './api';
+import 'slim-select/dist/slimselect.css';
 
-const API_KEY = 'live_eaASRXuczMMOgneTTRwafRQDJcHo9mP7PCNVoGTCeMnyyPczaSDNwBmTPKtCAkiy';
-const BASE_URL = 'https://api.thecatapi.com/v1';
+const refs = {
+  select: document.querySelector('.breed-select'),
+  catContainer: document.querySelector('.cat-info'),
+  loader: document.querySelector('.loader'),
+};
 
-const refs ={
-    select : document.querySelector('.breed-select'),
-    catContainer : document.querySelector(".cat-info")
-}
 
-axios.defaults.headers.common["x-api-key"] = API_KEY;
-
-function fetchBreeds() {
-    return axios.get(`${BASE_URL}/breeds`)
-        .then(response => refs.select.innerHTML = createSelection(response.data))  // axios вже автоматично парсить JSON
-        .catch(error => {
-            console.error("Axios error:", error);
-            throw error;
-        });
-}
-
-fetchBreeds()
-
-function createSelection(arr){
-    return arr.map(({name, id}) => `<option value=${id}>${name}</option>`).join('')
-}
-
-function createCatsMarkup(arr){
-return arr.map(({breeds: [{name, temperament, description}], url}) =>`<img src="${url}" width = '400px' alt="${name}">
-<h1>${name}</h1>
-<p>${description}</p>
-<p><span>Temperament </span>${temperament}</p>`)
+function showLoader() {
+  refs.loader.classList.remove('is-hidden');
 }
 
 
-function fetchCatByBreed(breedId){
-    return axios.get(`https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}`)
-    .then(response => {console.log(response.data)
-        return refs.catContainer.innerHTML = createCatsMarkup(response.data)})  // axios вже автоматично парсить JSON
+function hideLoader() {
+  refs.loader.classList.add('is-hidden');
+}
+
+
+function clearCatsContainer() {
+  refs.catContainer.innerHTML = '';
+}
+
+/**
+ * Формує розмітку для списку порід
+ * @param {Array} breeds - Масив порід
+ * @returns {string}
+ */
+function createSelection(breeds) {
+  return breeds.map(({ name, id }) => `<option value=${id}>${name}</option>`).join('');
+}
+
+/**
+ * Формує розмітку для картки кота
+ * @param {Array} cats - Масив з об'єктом кота
+ * @returns {string}
+ */
+function createCatsMarkup(cats) {
+  return cats.map(({ breeds: [{ name, temperament, description }], url }) => 
+    `<div class="cat-card">
+      <img class="cat-card__image" src="${url}" alt="${name}">
+      <div class="cat-card__info">
+        <h1 class="cat-card__title">${name}</h1>
+        <p class="cat-card__description">${description}</p>
+        <p class="cat-card__temperament"><span>Temperament: </span>${temperament}</p>
+      </div>
+    </div>`
+  ).join('');
+}
+
+
+function initBreeds() {
+  showLoader();
+
+  fetchBreeds()
+    .then(breeds => {
+      refs.select.innerHTML = createSelection(breeds);
+      hideLoader();
+      refs.select.classList.remove('is-hidden');
+
+      new SlimSelect({ select: '#breed-select' });
+    })
     .catch(error => {
-        console.error("Axios error:", error);
-        throw error;
+      hideLoader();
+      Notiflix.Notify.failure('Схоже щось пішло не так, спробуйте будь ласка пізніше');
     });
 }
 
-refs.select.addEventListener('change', onBreedSelect)
 
-function onBreedSelect(evt){
-    console.log(evt.target.value)
-    fetchCatByBreed(evt.target.value)
+function onBreedSelect(evt) {
+  const breedId = evt.target.value;
+  clearCatsContainer();
+  showLoader();
+
+  fetchCatByBreed(breedId)
+    .then(catData => {
+      refs.catContainer.innerHTML = createCatsMarkup(catData);
+      hideLoader();
+    })
+    .catch(error => {
+      hideLoader();
+      Notiflix.Notify.failure('Схоже щось пішло не так, спробуйте будь ласка пізніше');
+    });
 }
+
+// Додаємо слухача подій
+refs.select.addEventListener('change', onBreedSelect);
+
+// Викликаємо функцію ініціалізації
+initBreeds();
